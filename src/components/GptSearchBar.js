@@ -1,15 +1,30 @@
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import lang from "../utils/languageConstant";
-import { useRef } from "react";
+import React, { useRef, useState } from "react";
 import openai from "../utils/openai";
+import { API_OPTIONS } from "../utils/constants";
+import { addGptMovieResults } from "../utils/gptSlice";
 
 const GptSearchBar = () => {
+  const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
   const langKey = useSelector((store) => store.config.lang);
 
   const searchText = useRef(null);
 
+  const searchMovieTMDB = async (movie) => {
+    const data = await fetch(
+      "https://api.themoviedb.org/3/search/movie?query=" +
+        movie +
+        "&include_adult=false&language=en-US&page=1",
+      API_OPTIONS
+    );
+    const json = await data.json();
+    return json.results;
+  };
+
   const handleGptSearchClick = async () => {
-    console.log(searchText.current.value);
+    setLoading(true);
 
     const gptQuery =
       "Act as a Movie Recommendation system and suggest some movies for the query : " +
@@ -20,9 +35,17 @@ const GptSearchBar = () => {
       messages: [{ role: "user", content: gptQuery }],
       model: "gpt-3.5-turbo",
     });
-    if (!gptResults.choices) {
+
+    if (!gptResults.choices || !gptResults.choices[0]?.message?.current) {
     }
-    console.log(gptResults.choices?.[0].message?.content);
+    console.log(gptResults.choices?.[0]?.message?.content);
+    const gptMovies = gptResults.choices?.[0]?.message?.content.split(",");
+    const promiseArray = gptMovies.map((movie) => searchMovieTMDB(movie));
+    const tmdbResults = await Promise.all(promiseArray);
+    setLoading(false);
+    dispatch(
+      addGptMovieResults({ movieNames: gptMovies, movieResults: tmdbResults })
+    );
   };
   return (
     <div className="pt-[10%] flex justify-center">
@@ -40,7 +63,7 @@ const GptSearchBar = () => {
           className=" col-span-3 py-2 px-4 m-4 bg-red-700 text-white rounded-lg "
           onClick={handleGptSearchClick}
         >
-          {lang[langKey].gptSearchPlaceholder}
+          {lang[langKey].search}
         </button>
       </form>
     </div>
